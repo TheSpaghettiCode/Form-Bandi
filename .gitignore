@@ -6,7 +6,9 @@ composer.phar
 php_portable/
 
 # File di output generati dall'applicazione
-data/*
+!data/*
+data/*.json
+data/*/*
 
 # Configurazione OS e Editor
 .vscode/

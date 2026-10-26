@@ -13,7 +13,10 @@ Una Single Page Application (SPA) ultra-leggera per gestire il budget docenti/at
 - `api/` -> Endpoint PHP. Contiene `process.php` (Parsing e Salva Dati su excel compilazioni)
 - `css/` -> Foglio stile Premium `style.css`
 - `js/` -> Logica SPA interattiva `script.js`
-- `data/` -> Cartella destinata allo storage dei fogli di calcolo. Nel repo sono incluse solo le "matrici" input (*offerta_formativa* e *Budget_Architettura*).
+- `data/` -> Cartella destinata allo storage dei fogli di calcolo.
+  - In `input` vanno inserite i file .xlsx contenenti budget e costo orario.
+  - In `output` verrà inserito il file di output.
+  - In `backup` verrà inserito l'eventuale backup che si sceglierà di eseguire.
 - `index.php` -> Pagina Front-end e Interfaccia UI.
 - `success.html` -> Pagina di fallback success.
 
