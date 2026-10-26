@@ -13,7 +13,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const inputCostoTotale = document.getElementById('costo_totale');
 
     const budgetAlert = document.getElementById('budgetAlert');
-    const validationAlert = document.getElementById('validationAlert');
     const submitBtn = document.getElementById('submitBtn');
     const form = document.getElementById('budgetForm');
 
@@ -23,7 +22,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const inputNome = document.getElementById('nome');
     const inputCognome = document.getElementById('cognome');
-    const inputCompetenze = document.getElementById('competenze');
 
     let currentBudget = 0;
 
@@ -31,33 +29,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let keysNoPrice = ['costo'];
     let keysPrice = ['studenti', 'ore'];
 
-    const minLimiti = {
-        'supporto_contratti': { minOre: 9 },
-        'supporto_studenti': { minOre: 30 },
-        'tutorato_studenti': { minOre: 14 },
-        'tutorato_dottorandi': { minOre: 10 },
-        'conferenze': { minCosto: 100, maxCosto: 600 }
-    };
-
-    document.querySelectorAll('#activitiesGridNoPrice th').forEach(th => {
-        if (th.textContent.includes('Dettagli')) {
-            const match = th.textContent.match(/\((.*?)\)/);
-            if (match) keysNoPrice = match[1].split(/[,/]/).map(s => s.trim().toLowerCase());
-        }
-    });
-
-    document.querySelectorAll('#activitiesGridPrice th').forEach(th => {
-        if (th.textContent.includes('Dettagli')) {
-            const match = th.textContent.match(/\((.*?)\)/);
-            if (match) keysPrice = match[1].split(/[,/]/).map(s => s.trim().toLowerCase());
-        }
-    });
-
-    // 3. Popola Select Insegnamenti
     corsiData.forEach((corso, index) => {
         const option = document.createElement('option');
         option.value = index;
-        option.textContent = corso.corso;
+        option.textContent = corso.corso + ' - [' + corso.ssd + ']';
         corsoSelect.appendChild(option);
     });
 
@@ -74,18 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
         row.setAttribute('data-is-price', isPrice ? '1' : '0');
         row.setAttribute('data-tariffa', tariffa);
 
-        let infoCosto = '';
-        if (isPrice) {
-            infoCosto = `<br><small>(${tariffa}€/h`;
-            if (minLimiti[inputName] && minLimiti[inputName].minOre) {
-                infoCosto += `, <span style="color: #000000; font-weight: 600;">min ${minLimiti[inputName].minOre}h/Pers.</span>`;
-            }
-            infoCosto += `)</small>`;
-        } else {
-            if (inputName === 'conferenze') {
-                infoCosto = `<br><small style="color: #000000; font-size: 0.75rem;">(min=100€, max=600€)</small>`;
-            }
-        }
+        let infoCosto = isPrice ? `<br><small>(${tariffa}€/h)</small>` : '';
 
         let colloquioCol = isPrice ? `
             <td>
@@ -139,55 +103,87 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    function updateLabels(container) {
-        const labels = container.querySelectorAll('.sv-index-label');
-        labels.forEach((label, idx) => {
-            label.textContent = `Pers.#${idx + 1}`;
-        });
-    }
-
-    function addSubvoce(inputName, isPrice, container, initStudenti = '', initValore = '') {
+    function addSubvoce(inputName, isPrice, container, initStudenti = '', initValore = '', initCompetenze = '', initRicerca = '') {
         const subRow = document.createElement('div');
         subRow.className = 'subvoce-row';
-        subRow.style.display = 'flex';
-        subRow.style.gap = '5px';
-        subRow.style.marginBottom = '5px';
+        subRow.style.marginBottom = '15px';
+        subRow.style.border = '1px solid #ddd';
+        subRow.style.padding = '8px';
+        subRow.style.borderRadius = '5px';
+        subRow.style.backgroundColor = '#fefefe';
 
         const placeholderValore = isPrice ? 'Ore' : 'Costo Fisso €';
 
-        let labelHtml = !isPrice ? `
-            <span class="sv-index-label" style="width: 25%; font-size: 0.85rem; font-weight: bold; align-self: center; color: var(--text-muted);">Pers.#</span>
-        ` : '';
-
         let studentiInput = isPrice ? `
-            <input type="number" class="sv-studenti" placeholder="N. Pers." min="1" step="1" value="${initStudenti}" required style="width: 40%; padding: 4px;">
+            <div style="width: 30%;">
+                <input type="number" class="sv-studenti" placeholder="N. Pers." min="1" step="1" value="${initStudenti}" required style="width: 100%; padding: 4px;">
+                <span class="error-message-inline" style="display:none; font-size:0.65rem;">Solo interi</span>
+            </div>
         ` : '';
-        let widthValore = isPrice ? '40%' : '55%';
+        let widthValore = isPrice ? '30%' : '80%';
+        let stepValore = '1';
+
+        let extraFields = `
+            <div style="margin-top: 8px;">
+                <label style="font-size:0.8rem; font-weight:bold;">Competenze / Requisiti:</label>
+                <textarea class="sv-competenze" required placeholder="Descrivi competenze..." style="width: 100%; padding: 4px; margin-top:2px; min-height: 40px; resize: vertical;">${initCompetenze}</textarea>
+            </div>
+        `;
+
+        if (inputName === 'supporto_contratti') {
+            extraFields += `
+                <div style="margin-top: 8px;">
+                    <label style="font-size:0.8rem; font-weight:bold;">Titolo della ricerca:</label>
+                    <input type="text" class="sv-ricerca" required placeholder="Inserisci titolo ricerca" value="${initRicerca}" style="width: 100%; padding: 4px; margin-top:2px;">
+                </div>
+            `;
+        }
 
         subRow.innerHTML = `
-            ${labelHtml}
-            ${studentiInput}
-            <input type="number" class="sv-valore" placeholder="${placeholderValore}" min="0" step="0.5" value="${initValore}" required style="width: ${widthValore}; padding: 4px;">
-            <button type="button" class="btn-remove-subvoce" style="width: 15%; color: red; cursor: pointer; padding: 4px;">X</button>
+            <div style="display: flex; gap: 5px; align-items: flex-start;">
+                ${studentiInput}
+                <div style="width: ${widthValore};">
+                    <input type="number" class="sv-valore" placeholder="${placeholderValore}" min="0" step="${stepValore}" value="${initValore}" required style="width: 100%; padding: 4px;">
+                    <span class="error-message-inline" style="display:none; font-size:0.65rem;">Solo interi</span>
+                </div>
+                <button type="button" class="btn-remove-subvoce" style="width: 25%; color: red; cursor: pointer; padding: 4px; height: max-content;">X Rimuovi</button>
+            </div>
+            ${extraFields}
         `;
 
         container.appendChild(subRow);
 
-        if (!isPrice) {
-            updateLabels(container);
-        }
-
         const btnRemove = subRow.querySelector('.btn-remove-subvoce');
         btnRemove.addEventListener('click', () => {
             subRow.remove();
-            if (!isPrice) {
-                updateLabels(container);
-            }
             calculateTotal();
         });
 
-        const inputs = subRow.querySelectorAll('input');
-        inputs.forEach(inp => inp.addEventListener('input', calculateTotal));
+        const inputs = subRow.querySelectorAll('input, textarea');
+        inputs.forEach(inp => {
+            if (inp.type === 'number') {
+                ['input', 'change'].forEach(evt => {
+                    inp.addEventListener(evt, function() {
+                        const val = this.value;
+                        const errorSpan = this.nextElementSibling;
+                        if (val.includes('.') || val.includes(',') || (val !== '' && !Number.isInteger(Number(val)))) {
+                            this.classList.add('input-error');
+                            if (errorSpan && errorSpan.classList.contains('error-message-inline')) {
+                                errorSpan.style.display = 'block';
+                            }
+                        } else {
+                            this.classList.remove('input-error');
+                            if (errorSpan && errorSpan.classList.contains('error-message-inline')) {
+                                errorSpan.style.display = 'none';
+                            }
+                        }
+                        calculateTotal();
+                    });
+                });
+            } else {
+                ['input', 'change'].forEach(evt => inp.addEventListener(evt, calculateTotal));
+            }
+        });
     }
 
 
@@ -210,10 +206,12 @@ document.addEventListener('DOMContentLoaded', () => {
         infoCard.classList.add('visible');
 
         // Svuotamento preventivo
-        document.getElementById('competenze').value = '';
         document.getElementById('note').value = '';
         document.querySelectorAll('.attiva-checkbox, .colloquio-checkbox').forEach(chk => {
-            chk.checked = false;
+            if (chk.checked) {
+                chk.checked = false;
+                chk.dispatchEvent(new Event('change'));
+            }
             if (chk.classList.contains('colloquio-checkbox')) chk.disabled = true;
         });
         document.querySelectorAll('.btn-add-subvoce').forEach(btn => btn.disabled = true);
@@ -223,7 +221,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof compilazioniPrecedentiData !== 'undefined' && compilazioniPrecedentiData[selectedCorso.corso]) {
             const oldValue = compilazioniPrecedentiData[selectedCorso.corso];
 
-            document.getElementById('competenze').value = oldValue.competenze || '';
             document.getElementById('note').value = oldValue.note || '';
 
             Object.keys(tariffeData).forEach(attivitaName => {
@@ -238,12 +235,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (checkAttiva) {
                         checkAttiva.checked = true;
+                        checkAttiva.dispatchEvent(new Event('change')); // Trigger visibility
+
                         if (checkColloquio) {
-                            checkColloquio.disabled = false;
                             checkColloquio.checked = oldValue[`${inputName}_colloquio`] === true;
                         }
-                        if (btnAdd) btnAdd.disabled = false;
 
+                        container.innerHTML = ''; // reset first empty subvoce
                         const sottovoci = oldValue[`${inputName}_sottovoci`];
                         if (sottovoci && Array.isArray(sottovoci)) {
                             sottovoci.forEach(sv => {
@@ -256,7 +254,11 @@ document.addEventListener('DOMContentLoaded', () => {
                                 } else {
                                     oreVal = sv[keysNoPrice[0]] !== undefined ? sv[keysNoPrice[0]] : (sv['costo'] !== undefined ? sv['costo'] : (vals[0] || ''));
                                 }
-                                addSubvoce(inputName, isPrice, container, studVal, oreVal);
+
+                                const compVal = sv['competenze'] || '';
+                                const ricVal = sv['ricerca'] || '';
+
+                                addSubvoce(inputName, isPrice, container, studVal, oreVal, compVal, ricVal);
                             });
                         }
                     }
@@ -270,7 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Validazione globale extra
     ['input', 'change', 'keyup'].forEach(evt => {
         form.addEventListener(evt, (e) => {
-            if (!e.target.classList.contains('sv-studenti') && !e.target.classList.contains('sv-valore')) {
+            if (!e.target.classList.contains('sv-studenti') && !e.target.classList.contains('sv-valore') && !e.target.classList.contains('sv-competenze') && !e.target.classList.contains('sv-ricerca')) {
                 calculateTotal();
             }
         });
@@ -280,7 +282,6 @@ document.addEventListener('DOMContentLoaded', () => {
         let totalCostAll = 0; // Tutto influenza il budget
         let hasActiveRows = false;
         let allActiveFilled = true;
-        let hasValidationErrors = false;
 
         const allRows = document.querySelectorAll('tr[data-attivita]');
 
@@ -306,61 +307,50 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 subRows.forEach(sub => {
                     const inputVal = sub.querySelector('.sv-valore');
+                    const compInput = sub.querySelector('.sv-competenze');
+                    const ricInput = sub.querySelector('.sv-ricerca');
+
                     const valStr = inputVal.value.trim();
                     const val = parseFloat(valStr) || 0;
+                    
+                    const compStr = compInput ? compInput.value.trim() : '';
+                    const ricStr = ricInput ? ricInput.value.trim() : '';
 
                     if (isPrice) {
                         const inputStud = sub.querySelector('.sv-studenti');
                         const studStr = inputStud.value.trim();
                         const stud = parseInt(studStr) || 0;
 
-                        if (studStr === '' || stud <= 0 || valStr === '' || val <= 0) {
+                        if (studStr === '' || stud <= 0 || valStr === '' || val <= 0 || compStr === '' || valStr.includes('.') || valStr.includes(',') || studStr.includes('.') || studStr.includes(',')) {
                             allActiveFilled = false;
-                            inputVal.classList.remove('input-error');
                         } else {
                             let rowSubCost = stud * val * tariffa;
                             let detailObj = {};
                             detailObj[keysPrice[0] || 'studenti'] = stud;
                             detailObj[keysPrice[1] || 'ore'] = val;
+                            detailObj['competenze'] = compStr;
+                            if (ricInput) detailObj['ricerca'] = ricStr;
+
                             dettagliArr.push(detailObj);
                             rowSum += rowSubCost;
-
-                            // Validazione minimo ore per persona
-                            const limit = minLimiti[inputName];
-                            if (limit && limit.minOre && val < limit.minOre) {
-                                inputVal.classList.add('input-error');
-                                hasValidationErrors = true;
-                            } else {
-                                inputVal.classList.remove('input-error');
-                            }
                         }
                     } else {
-                        if (valStr === '' || val <= 0) {
+                        if (valStr === '' || val <= 0 || compStr === '' || valStr.includes('.') || valStr.includes(',')) {
                             allActiveFilled = false;
-                            inputVal.classList.remove('input-error');
                         } else {
                             let rowSubCost = val; // Qui il valore inserito è già il costo fisso
                             let detailObj = {};
                             detailObj[keysNoPrice[0] || 'costo'] = val;
+                            detailObj['competenze'] = compStr;
+                            if (ricInput) detailObj['ricerca'] = ricStr;
+
                             dettagliArr.push(detailObj);
                             rowSum += rowSubCost;
-
-                            // Validazione min/max costo per persona
-                            const limit = minLimiti[inputName];
-                            if (limit && limit.minCosto && (val < limit.minCosto || val > limit.maxCosto)) {
-                                inputVal.classList.add('input-error');
-                                hasValidationErrors = true;
-                            } else {
-                                inputVal.classList.remove('input-error');
-                            }
                         }
                     }
                 });
 
                 totalCostAll += rowSum;
-            } else {
-                // Rimuovi errori se la riga non è attiva
-                container.querySelectorAll('.input-error').forEach(inp => inp.classList.remove('input-error'));
             }
 
             // Aggiorna Costo singola riga
@@ -376,18 +366,17 @@ document.addEventListener('DOMContentLoaded', () => {
         inputCostoTotale.value = totalCostAll;
 
         // Validatore Budget CRUCIALE
-        validateBudget(totalCostAll, isActivityValid, hasValidationErrors);
+        validateBudget(totalCostAll, isActivityValid);
     }
 
-    function validateBudget(totalCost, isActivityValid, hasValidationErrors) {
+    function validateBudget(totalCost, isActivityValid) {
         if (!corsoSelect.value) {
             submitBtn.disabled = true;
             return;
         }
 
         const isTextValid = inputNome.value.trim() !== '' &&
-            inputCognome.value.trim() !== '' &&
-            inputCompetenze.value.trim() !== '';
+            inputCognome.value.trim() !== '';
 
         const isFormValid = form.checkValidity();
 
@@ -395,22 +384,17 @@ document.addEventListener('DOMContentLoaded', () => {
             totalValueDisplay.classList.remove('budget-ok');
             totalValueDisplay.classList.add('budget-error');
             budgetAlert.classList.add('visible');
+            submitBtn.disabled = true;
         } else {
             totalValueDisplay.classList.remove('budget-error');
             totalValueDisplay.classList.add('budget-ok');
             budgetAlert.classList.remove('visible');
-        }
 
-        if (hasValidationErrors) {
-            validationAlert.classList.add('visible');
-        } else {
-            validationAlert.classList.remove('visible');
-        }
-
-        if (totalCost <= currentBudget && !hasValidationErrors && isTextValid && isFormValid && isActivityValid) {
-            submitBtn.disabled = false;
-        } else {
-            submitBtn.disabled = true;
+            if (isTextValid && isFormValid && isActivityValid) {
+                submitBtn.disabled = false;
+            } else {
+                submitBtn.disabled = true;
+            }
         }
     }
 
@@ -466,6 +450,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const formData = new FormData(form);
         const selectedCorsoObj = corsiData[corsoSelect.value];
         formData.set('corso', selectedCorsoObj.corso);
+        formData.set('ssd', selectedCorsoObj.ssd || '');
+        formData.set('laurea', selectedCorsoObj.laurea || '');
+        formData.set('anno', selectedCorsoObj.anno || '');
+        formData.set('semestre', selectedCorsoObj.semestre || '');
 
         if (typeof compilazioniPrecedentiData !== 'undefined' && compilazioniPrecedentiData[selectedCorsoObj.corso]) {
             customModal.classList.add('active');

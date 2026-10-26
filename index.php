@@ -14,7 +14,7 @@ try {
     if (class_exists('PhpOffice\PhpSpreadsheet\IOFactory')) {
         // 1. Leggi offerta_formativa_2026-2027.xlsx
         // Cerchiamo qualsiasi file inizi per "offerta_formativa" nella dir data/
-        $offertaFiles = glob(__DIR__ . '/data/offerta_formativa_*.xlsx');
+        $offertaFiles = glob(__DIR__ . '/data/input/offerta_formativa_*.xlsx');
         if (!empty($offertaFiles)) {
             $fileSorgente = $offertaFiles[0];
             $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($fileSorgente);
@@ -25,6 +25,7 @@ try {
             
             // Intelligente ricerca delle colonne iterando le prime 3 righe (le intestazioni sono alla riga 2 solitamente)
             $colDocente = 'A'; $colCorso = 'D'; $colBudget = 'J';
+            $colSSD = 'C'; $colLaurea = 'F'; $colAnno = 'G'; $colSem = 'H';
             
             for ($r = 1; $r <= 3; $r++) {
                 $rowIterator = $sheet->getRowIterator($r, $r)->current();
@@ -35,6 +36,10 @@ try {
                         if ($val === 'docente') $colDocente = $col;
                         elseif (strpos($val, 'denominazione corso') !== false) $colCorso = $col;
                         elseif (strpos($val, 'budget previsto per supporto') !== false || strpos($val, 'budget') !== false) $colBudget = $col;
+                        elseif ($val === 'ssd') $colSSD = $col;
+                        elseif (strpos($val, 'laurea') !== false) $colLaurea = $col;
+                        elseif ($val === 'anno') $colAnno = $col;
+                        elseif (strpos($val, 'sem.') !== false || $val === 'semestre') $colSem = $col;
                     }
                 }
             }
@@ -47,18 +52,32 @@ try {
                 // Rimuoviamo eventuali formattazioni per estrarre il valore float
                 $budget = (float)filter_var($budgetStr, FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
                 
+                $ssd = (string)$sheet->getCell($colSSD . $row)->getValue();
+                $laurea = (string)$sheet->getCell($colLaurea . $row)->getValue();
+                $anno = (string)$sheet->getCell($colAnno . $row)->getValue();
+                $semestre = (string)$sheet->getCell($colSem . $row)->getValue();
+                
                 if (!empty(trim($corso)) && !empty(trim($docente))) {
                     $corsi[] = [
                         'docente' => trim($docente),
                         'corso' => trim($corso),
-                        'budget' => $budget
+                        'budget' => $budget,
+                        'ssd' => trim($ssd),
+                        'laurea' => trim($laurea),
+                        'anno' => trim($anno),
+                        'semestre' => trim($semestre)
                     ];
                 }
             }
+            
+            // Ordina i corsi alfabeticamente per nome corso
+            usort($corsi, function($a, $b) {
+                return strcasecmp($a['corso'], $b['corso']);
+            });
         }
 
         // 2. Leggi Budget_Architettura.xlsx
-        $fileTariffe = __DIR__ . '/data/Budget_Architettura.xlsx';
+        $fileTariffe = __DIR__ . '/data/input/Budget_Architettura.xlsx';
         if (file_exists($fileTariffe)) {
             $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($fileTariffe);
             $sheet = $spreadsheet->getActiveSheet();
@@ -81,56 +100,12 @@ try {
             }
         }
 
-        // 3. Leggi compilazioni pre-esistenti per permettere l'update
-        $fileCompilazioni = __DIR__ . '/data/compilazioni_docenti.xlsx';
+        // 3. Leggi compilazioni pre-esistenti per permettere l'update (ora da JSON)
+        $fileCompilazioni = __DIR__ . '/data/database.json';
         if (file_exists($fileCompilazioni)) {
-            $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($fileCompilazioni);
-            $sheet = $spreadsheet->getActiveSheet();
-            $highestRow = $sheet->getHighestDataRow();
-            $highestCol = $sheet->getHighestDataColumn();
-            $highestColIndex = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($highestCol);
-            
-            $headers = [];
-            for ($col = 1; $col <= $highestColIndex; $col++) {
-                $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col);
-                $headers[$colLetter] = trim((string)$sheet->getCell($colLetter . '1')->getValue());
-            }
-            
-            for ($row = 2; $row <= $highestRow; $row++) {
-                $corsoStr = (string)$sheet->getCell('D' . $row)->getValue();
-                if (!empty($corsoStr)) {
-                    $compData = [
-                        'nome' => (string)$sheet->getCell('B' . $row)->getValue(),
-                        'cognome' => (string)$sheet->getCell('C' . $row)->getValue(),
-                        'competenze' => (string)$sheet->getCell('H' . $row)->getValue(),
-                        'note' => (string)$sheet->getCell('I' . $row)->getValue()
-                    ];
-                    
-                    foreach ($tariffe as $nomeAttivita => $dati) {
-                        $inputName = strtolower(str_replace(' ', '_', $nomeAttivita));
-                        $colAttiva = array_search("$nomeAttivita - Attiva", $headers);
-                        $colColloquio = array_search("$nomeAttivita - Colloquio", $headers);
-                        $colDettagli = array_search("$nomeAttivita - Dettagli", $headers);
-                        
-                        if ($colAttiva !== false && $colDettagli !== false) {
-                            $attiva = (string)$sheet->getCell($colAttiva . $row)->getValue();
-                            $colloquio = $colColloquio !== false ? (string)$sheet->getCell($colColloquio . $row)->getValue() : 'NO';
-                            $dettagliJson = (string)$sheet->getCell($colDettagli . $row)->getValue();
-                            
-                            $compData["{$inputName}_attiva"] = (strtoupper($attiva) === 'SI');
-                            $compData["{$inputName}_colloquio"] = (strtoupper($colloquio) === 'SI');
-                            
-                            $sottovoci = json_decode($dettagliJson, true);
-                            if (is_array($sottovoci)) {
-                                $compData["{$inputName}_sottovoci"] = $sottovoci;
-                            } else {
-                                $compData["{$inputName}_sottovoci"] = [];
-                            }
-                        }
-                    }
-                    
-                    $compilazioniPrecedenti[$corsoStr] = $compData;
-                }
+            $dbData = json_decode(file_get_contents($fileCompilazioni), true);
+            if (is_array($dbData)) {
+                $compilazioniPrecedenti = $dbData;
             }
         }
     }
@@ -168,7 +143,7 @@ if (empty($tariffe) || $allTariffeZero) {
     <title>Gestione Budget Didattici | Architettura</title>
     <!-- Modern Typography -->
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=<?php echo time(); ?>">
 </head>
 <body>
 
@@ -261,17 +236,8 @@ if (empty($tariffe) || $allTariffeZero) {
                 ⚠️ Attenzione! Il costo totale supera il budget previsto per questo corso. Non è possibile inviare la richiesta.
             </div>
 
-            <div id="validationAlert" class="alert-message" style="color: #991b1b; background: #fef2f2; border: 1px solid #f87171;">
-                ⚠️ Attenzione! Rispettare i limiti minimi/massimi indicati per le ore o i costi.
-            </div>
-
             <div class="form-group" style="margin-top: 2rem;">
-                <label for="competenze">Competenze/requisiti richiesti</label>
-                <textarea id="competenze" name="competenze" required placeholder="Descrivi brevemente un profilo di competenze e/o requisiti richiesti per il bando"></textarea>
-            </div>
-
-            <div class="form-group" style="margin-top: 2rem;">
-                <label for="note">Note<small> (opzionale)</small></label>
+                <label for="note">Note Generali<small> (opzionale)</small></label>
                 <textarea id="note" name="note" placeholder="Descrivi qui ulteriori dettagli relativi alla ripartizione dei supporti"></textarea>
             </div>
 
